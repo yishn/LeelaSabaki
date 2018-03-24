@@ -20,7 +20,7 @@
   - **Arguments:** [LeelaSabaki options](#options), followed by your path to Leela (Zero), followed by additional command line arguments to Leela. Leela will be called with the `--gtp` option automatically. If you're using Leela Zero, make sure to configure it properly.
 - **Example**
   - **Path:** `leelasabaki`
-  - **Arguments:** `--heatmap my_path/leelaz -w my_path/weights.txt --playouts 100 --noponder`
+  - **Arguments:** `--heatmap my_path/leelaz -w my_path/weights --playouts 100 --noponder`
 
 ## CLI Manual
 
