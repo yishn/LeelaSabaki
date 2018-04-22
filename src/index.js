@@ -12,7 +12,7 @@ if (leelaArgIndex < 0 || globalArgs.includes('--help')) return console.log(`
     ${pkg.productName} v${pkg.version}
 
     USAGE:
-        ${pkg.name} [--flat] [--heatmap] [--help] <path-to-leela> [leela-arguments...]
+        ${pkg.name} [--flat] [--heatmap] [--black] [--white] [--help] <path-to-leela> [leela-arguments...]
 
     OPTIONS:
         --flat
@@ -52,7 +52,12 @@ function log2variations(log) {
     let lines = log.split('\n')
 
     let startIndex = lines.findIndex(line => line.includes('MC winrate=') || line.includes('NN eval='))
-    if (startIndex < 0) startIndex = lines.length
+    if (startIndex < 0) startIndex = 0
+
+    // dont do variations if the user has not set the args
+    if (globalArgs.includes('--black') & state.genmoveColor === 'B') {}
+    else if (globalArgs.includes('--white') & state.genmoveColor === 'W') {}
+    else return ['']
 
     let colors = [state.genmoveColor, state.genmoveColor === 'B' ? 'W' : 'B']
 
@@ -115,7 +120,7 @@ async function handleInput(input) {
     let {id, name, args} = Command.fromString(input)
     if (id == null) id = ''
 
-    if (['genmove', 'heatmap'].includes(name)) stderrLogger.start()
+    if (['genmove', 'heatmap', 'play'].includes(name)) stderrLogger.start()
 
     if (name === 'sabaki-genmovelog') {
         let variations = log2variations(stderrLogger.log)
@@ -159,7 +164,7 @@ async function handleInput(input) {
 
     let response = await controller.sendCommand(Command.fromString(input))
 
-    if (name === 'genmove') {
+    if (['genmove', 'play'].includes(name)) {
         stderrLogger.stop()
         if (!response.error) state.genmoveColor = args[0][0].toUpperCase()
     } else if (name === 'list_commands') {
