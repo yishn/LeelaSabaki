@@ -12,7 +12,7 @@ if (leelaArgIndex < 0 || globalArgs.includes('--help')) return console.log(`
     ${pkg.productName} v${pkg.version}
 
     USAGE:
-        ${pkg.name} [--flat] [--heatmap] [--black] [--white] [--help] <path-to-leela> [leela-arguments...]
+        ${pkg.name} [--flat] [--heatmap] [--black] [--white] [--limitdepth] [--help] <path-to-leela> [leela-arguments...]
 
     OPTIONS:
         --flat
@@ -21,6 +21,15 @@ if (leelaArgIndex < 0 || globalArgs.includes('--help')) return console.log(`
 
         --heatmap
             Visualizes network probabilities as a heatmap after each generated move.
+        
+        --black
+            Include black variations
+
+        --white
+            Include white variations
+
+        --limitdepth
+            Truncate variations to a depth of 7
 
         --help
             Shows this help message.
@@ -43,6 +52,8 @@ let state = {
     size: 19,
     genmoveColor: 'B'
 }
+
+let depth = globalArgs.includes('--limitdepth') ? 7 : 21
 
 controller.start()
 controller.process.on('exit', code => process.exit(code))
@@ -70,6 +81,7 @@ function log2variations(log) {
                 .replace(/\s+/g, ' ').slice(1, -1).split(') (')
                 .reduce((acc, x) => Object.assign(acc, {[x[0]]: x.slice(x.indexOf(':') + 2)}), {}),
             variation: line.slice(line.indexOf('PV: ') + 4).trim().split(/\s+/)
+                .slice(0, depth)
         }))
         .filter(({visits, variation}) => variation.length >= 4)
         .map(({visits, stats, variation}) =>
