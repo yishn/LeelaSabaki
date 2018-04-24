@@ -11,8 +11,8 @@ let globalArgs = process.argv.slice(2, leelaArgIndex)
 if (leelaArgIndex < 0 || globalArgs.includes('--help')) return console.log(`
     ${pkg.productName} v${pkg.version}
 
-    USAGE:
-        ${pkg.name} [--flat] [--heatmap] [--black] [--white] [--limitdepth] [--help] <path-to-leela> [leela-arguments...]
+       USAGE:
+        ${pkg.name} [--flat] [--heatmap] [--black] [--white] [--limitdepth] [--labels] [--help] <path-to-leela> [leela-arguments...]
 
     OPTIONS:
         --flat
@@ -30,6 +30,9 @@ if (leelaArgIndex < 0 || globalArgs.includes('--help')) return console.log(`
 
         --limitdepth
             Truncate variations to a depth of 7
+
+        --labels
+            Display labels for variations A, B, C, ...
 
         --help
             Shows this help message.
@@ -59,16 +62,26 @@ controller.start()
 controller.process.on('exit', code => process.exit(code))
 controller.on('stderr', ({content}) => enableStderrRelay && process.stderr.write(content + '\n'))
 
-function log2variations(log) {
+function log2labels(log) {
     let lines = log.split('\n')
 
     let startIndex = lines.findIndex(line => line.includes('MC winrate=') || line.includes('NN eval='))
     if (startIndex < 0) startIndex = 0
 
-    // dont do variations if the user has not set the args
-    if (globalArgs.includes('--black') & state.genmoveColor === 'B') {}
-    else if (globalArgs.includes('--white') & state.genmoveColor === 'W') {}
-    else return ['']
+    return lines
+        .slice(startIndex)
+        .filter(line => line.includes('->'))
+        .map(line => line.slice(line.indexOf('PV: ') + 4).trim().split(/\s+/))
+        .filter(line => line.length >= 4)
+        .map(line => line.slice(0,1))
+        .join(';')
+}
+
+function log2variations(log) {
+    let lines = log.split('\n')
+
+    let startIndex = lines.findIndex(line => line.includes('MC winrate=') || line.includes('NN eval='))
+    if (startIndex < 0) startIndex = 0
 
     let colors = [state.genmoveColor, state.genmoveColor === 'B' ? 'W' : 'B']
 
@@ -135,9 +148,29 @@ async function handleInput(input) {
     if (['genmove', 'heatmap', 'play'].includes(name)) stderrLogger.start()
 
     if (name === 'sabaki-genmovelog') {
-        let variations = log2variations(stderrLogger.log)
-        let json = {variations}
+        let variations = []
+        let labels = []
 
+        // Do variations and labels
+        if ((globalArgs.includes('--black') & state.genmoveColor === 'B') ||
+            (globalArgs.includes('--white') & state.genmoveColor === 'W')) {
+
+            variations = log2variations(stderrLogger.log)
+            
+            if (globalArgs.includes('--labels')) { 
+                labels = log2labels(stderrLogger.log)
+                if (labels.length > 0) {
+                    let alpha = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ'
+                    labels = labels.split(';')
+                        .map((x, i) => coord2point(x, state.size) + ":" + alpha[Math.min(i, alpha.length - 1)])
+                        .join(';')
+                }
+            }
+        }
+
+        let json = {variations}
+        json.labels = labels
+        
         if (globalArgs.includes('--heatmap')) {
             enableStderrRelay = false
             let result = await handleInput('heatmap')
