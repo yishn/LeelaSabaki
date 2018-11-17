@@ -11,8 +11,8 @@ let globalArgs = process.argv.slice(2, leelaArgIndex)
 if (leelaArgIndex < 0 || globalArgs.includes('--help')) return console.log(`
     ${pkg.productName} v${pkg.version}
 
-    USAGE:
-        ${pkg.name} [--flat] [--heatmap] [--help] <path-to-leela> [leela-arguments...]
+       USAGE:
+        ${pkg.name} [--flat] [--heatmap] [--black] [--white] [--limitdepth] [--labels] [--help] <path-to-leela> [leela-arguments...]
 
     OPTIONS:
         --flat
@@ -21,6 +21,18 @@ if (leelaArgIndex < 0 || globalArgs.includes('--help')) return console.log(`
 
         --heatmap
             Visualizes network probabilities as a heatmap after each generated move.
+        
+        --black
+            Include black variations
+
+        --white
+            Include white variations
+
+        --limitdepth
+            Truncate variations to a depth of 7
+
+        --labels
+            Display labels for variations A, B, C, ...
 
         --help
             Shows this help message.
@@ -44,15 +56,32 @@ let state = {
     genmoveColor: 'B'
 }
 
+let depth = globalArgs.includes('--limitdepth') ? 7 : 21
+
 controller.start()
 controller.process.on('exit', code => process.exit(code))
 controller.on('stderr', ({content}) => enableStderrRelay && process.stderr.write(content + '\n'))
+
+function log2labels(log) {
+    let lines = log.split('\n')
+
+    let startIndex = lines.findIndex(line => line.includes('MC winrate=') || line.includes('NN eval='))
+    if (startIndex < 0) startIndex = 0
+
+    return lines
+        .slice(startIndex)
+        .filter(line => line.includes('->'))
+        .map(line => line.slice(line.indexOf('PV: ') + 4).trim().split(/\s+/))
+        .filter(line => line.length >= 4)
+        .map(line => line.slice(0,1))
+        .join(';')
+}
 
 function log2variations(log) {
     let lines = log.split('\n')
 
     let startIndex = lines.findIndex(line => line.includes('MC winrate=') || line.includes('NN eval='))
-    if (startIndex < 0) startIndex = lines.length
+    if (startIndex < 0) startIndex = 0
 
     let colors = [state.genmoveColor, state.genmoveColor === 'B' ? 'W' : 'B']
 
@@ -65,6 +94,7 @@ function log2variations(log) {
                 .replace(/\s+/g, ' ').slice(1, -1).split(') (')
                 .reduce((acc, x) => Object.assign(acc, {[x[0]]: x.slice(x.indexOf(':') + 2)}), {}),
             variation: line.slice(line.indexOf('PV: ') + 4).trim().split(/\s+/)
+                .slice(0, depth)
         }))
         .filter(({visits, variation}) => variation.length >= 4)
         .map(({visits, stats, variation}) =>
@@ -115,12 +145,32 @@ async function handleInput(input) {
     let {id, name, args} = Command.fromString(input)
     if (id == null) id = ''
 
-    if (['genmove', 'heatmap'].includes(name)) stderrLogger.start()
+    if (['genmove', 'heatmap', 'play'].includes(name)) stderrLogger.start()
 
     if (name === 'sabaki-genmovelog') {
-        let variations = log2variations(stderrLogger.log)
-        let json = {variations}
+        let variations = []
+        let labels = []
 
+        // Do variations and labels
+        if ((globalArgs.includes('--black') & state.genmoveColor === 'B') ||
+            (globalArgs.includes('--white') & state.genmoveColor === 'W')) {
+
+            variations = log2variations(stderrLogger.log)
+            
+            if (globalArgs.includes('--labels')) { 
+                labels = log2labels(stderrLogger.log)
+                if (labels.length > 0) {
+                    let alpha = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ'
+                    labels = labels.split(';')
+                        .map((x, i) => coord2point(x, state.size) + ":" + alpha[Math.min(i, alpha.length - 1)])
+                        .join(';')
+                }
+            }
+        }
+
+        let json = {variations}
+        json.labels = labels
+        
         if (globalArgs.includes('--heatmap')) {
             enableStderrRelay = false
             let result = await handleInput('heatmap')
@@ -159,7 +209,7 @@ async function handleInput(input) {
 
     let response = await controller.sendCommand(Command.fromString(input))
 
-    if (name === 'genmove') {
+    if (['genmove', 'play'].includes(name)) {
         stderrLogger.stop()
         if (!response.error) state.genmoveColor = args[0][0].toUpperCase()
     } else if (name === 'list_commands') {
